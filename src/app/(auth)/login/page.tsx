@@ -6,8 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import apiClient from "@/lib/api";
+import { useAuthStore } from "@/store/useAuthStore";
 
 export default function LoginPage() {
+    // 스토어에서 로그인 함수(login)만 꺼내오기
+    const login = useAuthStore((state) => state.login);
+
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState<string | null>(null); // 👈 에러 상태
@@ -21,16 +25,23 @@ export default function LoginPage() {
 
         try {
             // 이제 응답 본문에 토큰이 없으므로, 변수에 저장할 필요 없음
-            await apiClient.post("/api/users/login", {
+            const response = await apiClient.post("/api/users/login", {
                 email: email,
                 password: password,
             });
 
-            console.log("로그인 성공! 쿠키가 설정되었습니다.");
+            // Zustand 스토어에 "나 로그인했어!" 라고 알리기
+            // API가 유저 이름(name)을 돌려준다면 그걸 쓰고, 없으면 '사용자'라고 저장합니다.
+            const userName = response.data?.name || "사용자";
+            login({
+                email: email,
+                name: userName
+            });
+
             alert("로그인에 성공했습니다!");
             router.push("/"); // 👈 로그인 성공 시 메인 페이지("/")로 이동
 
-        } catch (err: any) {
+        } catch (err) {
             console.error("로그인 실패:", err);
             setError("이메일 또는 비밀번호가 올바르지 않습니다.");
         } finally {

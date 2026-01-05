@@ -1,22 +1,37 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// 이 함수는 matcher에 지정된 경로에 대한 요청이 오면 실행됩니다.
-export function middleware(request: NextRequest) {
-    // 1. 요청에서 accessToken 쿠키를 가져옵니다.
-    const accessToken = request.cookies.get('accessToken');
+// 1. 로그인이 필요한 페이지들 (보호된 경로)
+const protectedRoutes = ['/dashboard', '/trade', '/portfolio', '/settings'];
+// 2. 이미 로그인한 사람은 접근 금지할 페이지들 (로그인, 회원가입)
+const authRoutes = ['/login', '/signup'];
 
-    // 2. accessToken이 없으면 로그인 페이지로 리다이렉트합니다.
-    if (!accessToken) {
-        // 사용자가 원래 가려던 경로를 쿼리 파라미터로 추가하여,
-        // 로그인 성공 후 원래 페이지로 돌아갈 수 있도록 합니다.
-        const url = request.nextUrl.clone();
-        url.pathname = '/login';
-        url.search = `redirect=${request.nextUrl.pathname}`;
-        return NextResponse.redirect(url);
+export function middleware(request: NextRequest) {
+    const token = request.cookies.get('accessToken')?.value; // 쿠키 확인
+    const { pathname } = request.nextUrl;
+
+    // -------------------------------------------------------------
+    // 규칙 A: 보호된 페이지 접근 제어
+    // "로그인 안 한 사람이 VIP 룸에 가려고 하면 -> 로그인 페이지로 쫓아냄"
+    // -------------------------------------------------------------
+    const isProtectedRoute = protectedRoutes.some((route) =>
+        pathname.startsWith(route)
+    );
+
+    if (isProtectedRoute && !token) {
+        const loginUrl = new URL('/login', request.url);
+        loginUrl.searchParams.set('callbackUrl', pathname); // 원래 가려던 곳 기억
+        return NextResponse.redirect(loginUrl);
     }
 
-    // 3. accessToken이 있으면 요청을 그대로 통과시킵니다.
+    // -------------------------------------------------------------
+    // 규칙 B: 인증 페이지 접근 제어 (여기가 사용자님이 원하신 기능! ✨)
+    // "이미 로그인한 사람이 로그인 페이지에 오면 -> 메인으로 보냄"
+    // -------------------------------------------------------------
+    if (authRoutes.includes(pathname) && token) {
+        return NextResponse.redirect(new URL('/', request.url));
+    }
+
     return NextResponse.next();
 }
 
@@ -29,8 +44,7 @@ export const config = {
          * - _next/static (정적 파일)
          * - _next/image (이미지 최적화 파일)
          * - favicon.ico (파비콘)
-         * - login, signup (인증이 필요 없는 페이지)
          */
-        '/((?!api|_next/static|_next/image|favicon.ico|login|signup).*)',
+        '/((?!api|_next/static|_next/image|favicon.ico).*)',
     ],
 }
